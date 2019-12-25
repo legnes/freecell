@@ -1,0 +1,149 @@
+<html>
+<head>
+  <title>Freecell!</title>
+  <link rel="shortcut icon" type="image/png" href="./img/freecellking.png"/>
+  <link rel="stylesheet" href="./css/lib/deck.css"/>
+  <style>
+    :root {
+      --card-width: 3.875rem;
+      --card-height: 5.5rem;
+    }
+
+    body {
+      margin: 10px;
+      overflow: hidden;
+      background-color: rgb(14, 124, 17);
+    }
+
+    #board {
+      width: 100%;
+      height: 100%;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-placeholder-quartet {
+      display: flex;
+    }
+
+    .card-placeholder {
+      width: var(--card-width);
+      height: var(--card-height);
+      border-style: solid;
+      border-width: 2px;
+      border-radius: 2px;
+      border-color: rgb(6, 47, 8) rgb(34, 221, 39) rgb(34, 221, 39) rgb(6, 47, 8);
+    }
+
+    .reset-button {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      background-color: transparent;
+      border-style: solid;
+      border-width: 2px;
+      border-radius: 2px;
+      border-color: rgb(34, 221, 39) rgb(6, 47, 8) rgb(6, 47, 8) rgb(34, 221, 39);
+    }
+
+    .reset-button::after {
+      /* NOTE: had to do this to avoid flipping button border */
+      /* TODO:: this is hacky as heck, improve */
+      content: '';
+      position: absolute;
+      display: block;
+      left: -2px;
+      top: -2px;
+      width: inherit;
+      height: inherit;
+      background-image: url("./img/freecellking.png");
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+
+    .reset-button.reflected::after {
+      transform: scaleX(-1);
+    }
+
+    .cascades {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      height: 100%;
+      margin-top: 20px;
+    }
+
+    .cascade-placeholder {
+      width: 100%;
+      height: 100%;
+    }
+
+    .deck-container {
+      position: relative;
+    }
+
+    .deck-positioner {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translateY(calc(var(--card-height) / 2));
+    }
+
+    #dragDeck {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #winMessage {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 60%;
+      height: 60%;
+      background-image: url('./img/winking.png');
+      background-size: cover;
+      background-repeat: no-repeat;
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+<body>
+  <!-- TODO: wrap this all in a fake windows window??? -->
+  <div id="board">
+    <div class="top">
+      <span class="card-placeholder-quartet">
+        <span class="card-placeholder deck-container"><span class="cell deck-positioner"></span></span>
+        <span class="card-placeholder deck-container"><span class="cell deck-positioner"></span></span>
+        <span class="card-placeholder deck-container"><span class="cell deck-positioner"></span></span>
+        <span class="card-placeholder deck-container"><span class="cell deck-positioner"></span></span>
+      </span>
+      <button class="reset-button" id="resetButton"></button>
+      <span class="card-placeholder-quartet">
+        <span class="card-placeholder deck-container"><span class="foundation deck-positioner"></span></span>
+        <span class="card-placeholder deck-container"><span class="foundation deck-positioner"></span></span>
+        <span class="card-placeholder deck-container"><span class="foundation deck-positioner"></span></span>
+        <span class="card-placeholder deck-container"><span class="foundation deck-positioner"></span></span>
+      </span>
+    </div>
+    <div id="cascades" class="cascades">
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+      <span class="cascade-placeholder deck-container"><span class="cascade deck-positioner"></span></span>
+    </div>
+  </div>
+  <div id="dragDeck" class="deck-positioner"></div>
+  <div id="winMessage"></div>
+  <script src="./js/lib/deck.min.js"></script>
+  <script src="./js/main.js"></script>
+</body>
+</html>
