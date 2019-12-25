@@ -121,7 +121,9 @@ Card.disableDragging = (card) => {
 };
 
 getEvtPosition = (evt) => {
-  if (evt.type.includes('touch')) evt = evt.touches[0];
+  if (evt.type.includes('touch')) {
+    evt = evt.touches[0] || evt.changedTouches[0];
+  }
   return { x: evt.clientX, y: evt.clientY };
 };
 
