@@ -38,8 +38,8 @@ Deck.dealCards = (fromDeck, toDeck, startCard) => {
   if (!startCard) startCard = fromDeck.cards[0];
   const startIndex = fromDeck.cards.indexOf(startCard);
   if (startIndex < 0) return;
+  const maxZ = toDeck.cards.reduce((max, card) => Math.max(max, Card.zIndex(card)), 0);
 
-  const maxZ = fromDeck.cards.reduce((max, card) => Math.max(max, Card.zIndex(card)), 0);
   const cards = fromDeck.cards.splice(startIndex);
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i];
@@ -380,6 +380,8 @@ newGame();
 
 // TODO:
 //  [ ] clean up lol
+//  [ ] fix z index
+//  [ ] make mobile more reliable
 
 
 
