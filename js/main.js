@@ -334,9 +334,9 @@ const updateDragState = () => {
 };
 
 const updateWinState = () => {
-  const remainingCards = _state.board.foundations.reduce((sum, deck) => (sum + deck.cards.length), 0);
-  if (remainingCards < 1) {
-    _state.ui.winMessage.style.width = 'inherit';
+  const foundationCards = _state.board.foundations.reduce((sum, deck) => (sum + deck.cards.length), 0);
+  if (foundationCards >= 52) {
+    _state.ui.winMessage.style.width = '';
   } else {
     _state.ui.winMessage.style.width = '0';
   }
