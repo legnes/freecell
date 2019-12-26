@@ -380,7 +380,6 @@ newGame();
 
 // TODO:
 //  [ ] clean up lol
-//  [ ] fix z index
 //  [ ] make mobile more reliable
 
 
