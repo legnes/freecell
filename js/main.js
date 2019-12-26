@@ -38,11 +38,13 @@ Deck.dealCards = (fromDeck, toDeck, startCard) => {
   if (!startCard) startCard = fromDeck.cards[0];
   const startIndex = fromDeck.cards.indexOf(startCard);
   if (startIndex < 0) return;
+
+  const maxZ = fromDeck.cards.reduce((max, card) => Math.max(max, Card.zIndex(card)), 0);
   const cards = fromDeck.cards.splice(startIndex);
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i];
     card.unmount();
-    card.$el.style.zIndex = startCard.$el.style.zIndex + i;
+    card.$el.style.zIndex = maxZ + i + 1;
     Deck.addCard(toDeck, card);
   }
 };
@@ -109,6 +111,8 @@ Deck.forEachDeckXCard = (decks, fn) => decks.forEach((d) => d.cards.forEach((c, 
 const Card = {};
 
 Card.fontSize = () => window.getComputedStyle(document.body).getPropertyValue('font-size').slice(0, -2);
+
+Card.zIndex = (card) => card.$el.style.zIndex;
 
 Card.enableDragging = (card) => {
   card.enableDragging();
@@ -375,7 +379,6 @@ initGlobalHandlers();
 newGame();
 
 // TODO:
-//  [ ] resizing?
 //  [ ] clean up lol
 
 
