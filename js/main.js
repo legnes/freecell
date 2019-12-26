@@ -120,14 +120,14 @@ Card.disableDragging = (card) => {
   card.isDraggable = false;
 };
 
-getEvtPosition = (evt) => {
+const getEvtPosition = (evt) => {
   if (evt.type.includes('touch')) {
     evt = evt.touches[0] || evt.changedTouches[0];
   }
   return { x: evt.clientX, y: evt.clientY };
 };
 
-subtractPositions = (a, b) => {
+const subtractPositions = (a, b) => {
   return {
     x: a.x - b.x,
     y: a.y - b.y
