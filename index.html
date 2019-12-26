@@ -5,8 +5,9 @@
   <link rel="stylesheet" href="./css/lib/deck.css"/>
   <style>
     :root {
-      --card-width: 3.875rem;
-      --card-height: 5.5rem;
+      --card-width: 5rem;
+      --card-height: calc(var(--card-width) * 1.42);
+      --font-size: calc(var(--card-height) * 0.12);
     }
 
     html, body {
@@ -16,6 +17,7 @@
     body {
       margin: 10px;
       background-color: rgb(14, 124, 17);
+      font-size: calc(var(--card-height) * 0.22);
     }
 
     #board {
