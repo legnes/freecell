@@ -361,7 +361,7 @@ const canDeckReceiveCards = (deck, cards) => {
 
   if (_state.board.cascades.includes(deck)) {
     const prevCard = Deck.lastCard(deck);
-    if (!prevCard) return botCard.rank === 13;
+    if (!prevCard) return true;
     return (((prevCard.suit + botCard.suit) % 2) === 1 &&
             prevCard.rank === botCard.rank + 1);
   }
