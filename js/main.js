@@ -26,12 +26,23 @@ Deck.deal = (fromDeck, toDeck) => {
   Deck.addCard(toDeck, card);
 };
 
-Deck.dealCard = (fromDeck, toDeck, card) => {
+Deck.dealCard = (fromDeck, toDeck, card, animate=false) => {
   const cardIndex = fromDeck.cards.indexOf(card);
   if (cardIndex < 0) return;
+
+  const maxZ = toDeck.cards.reduce((max, card) => Math.max(max, Card.zIndex(card)), 0);
+  card.$el.style.zIndex = Math.max(maxZ + 1, card.$el.style.zIndex);
+
+  if (animate) {
+    const fromPos = fromDeck.$el.getBoundingClientRect();
+    const toPos = toDeck.$el.getBoundingClientRect();
+    card.x = fromPos.x - toPos.x;
+    card.y = fromPos.y - toPos.y;
+  }
+
   fromDeck.cards.splice(cardIndex, 1);
   card.unmount();
-  Deck.addCard(toDeck, card);
+  Deck.addCard(toDeck, card, 0, animate ? 100 : 0);
 };
 
 Deck.dealCards = (fromDeck, toDeck, startCard) => {
@@ -49,13 +60,13 @@ Deck.dealCards = (fromDeck, toDeck, startCard) => {
   }
 };
 
-Deck.addCard = (deck, card) => {
+Deck.addCard = (deck, card, delay=0, duration=0) => {
   deck.cards.push(card);
   card.mount(deck.$el);
   card.deck = deck;
   card.animateTo({
-    delay: 0,
-    duration: 0,
+    delay,
+    duration,
     x: 0,
     y: deck.isSpreadable ? Deck.lastIdx(deck) * Card.fontSize() : 0,
   });
@@ -108,6 +119,8 @@ Deck.makeSpreadable = (deck) => {
 
 Deck.forEachDeckXCard = (decks, fn) => decks.forEach((d) => d.cards.forEach((c, i) => fn(d, c, i)));
 
+Deck.decksCardCount = (decks, fn) => decks.reduce((sum, d) => (d.cards.length + sum), 0);
+
 const Card = {};
 
 Card.fontSize = () => window.getComputedStyle(document.body).getPropertyValue('font-size').slice(0, -2);
@@ -123,6 +136,10 @@ Card.disableDragging = (card) => {
   card.disableDragging();
   card.isDraggable = false;
 };
+
+Card.isValidStack = (prevCard, card) => (((prevCard.suit + card.suit) % 2) === 1 && prevCard.rank === card.rank + 1);
+
+Card.isNextInSuit = (prevCard, card) => (prevCard.suit === card.suit && prevCard.rank === card.rank - 1);
 
 const getEvtPosition = (evt) => {
   if (evt.type.includes('touch')) {
@@ -172,6 +189,11 @@ const initGlobalState = () => {
     }
   };
   _state.board.cascades.forEach(Deck.makeSpreadable);
+  _state.board.allDecks = [
+    ..._state.board.cascades,
+    ..._state.board.foundations,
+    ..._state.board.cells
+  ];
   return _state;
 };
 
@@ -197,10 +219,7 @@ const initCardHanlders = (() => {
     const evtPos = getEvtPosition(evt);
     let toDeck;
     let minDeckDistance = Infinity;
-    [ ..._state.board.cascades,
-      ..._state.board.foundations,
-      ..._state.board.cells
-    ].forEach((deck) => {
+    _state.board.allDecks.forEach((deck) => {
       const deckPos = deck.$el.getBoundingClientRect();
       const deckDistance = Math.sqrt((evtPos.x - deckPos.x) * (evtPos.x - deckPos.x) + (evtPos.y - deckPos.y) * (evtPos.y - deckPos.y));
       if (deckDistance < minDeckDistance) {
@@ -282,17 +301,14 @@ const initCardHanlders = (() => {
 
 const newGame = () => {
   // First queue a test fn to make sure no decks are still animating
-  for (let item in _state.board) {
-    let busyDecks = _state.board[item].length;
-    _state.board[item].forEach(d => d.queue((cb) => { busyDecks--; cb(); }));
-    if (busyDecks > 0) return false;
+  for (let i = 0; i < _state.board.allDecks.length; i++) {
+    const deck = _state.board.allDecks[i];
+    let idle = true;
+    deck.queue((cb) => { idle = false; cb(); });
+    if (idle) return false;
   }
-
-  for (let item in _state.board) {
-    if (_state.board[item] && _state.board[item].length > 0) {
-      _state.board[item].forEach(Deck.empty);
-    }
-  }
+  // Then empty all the decks
+  _state.board.allDecks.forEach(Deck.empty);
 
   const dealDeck = Deck();
   initCardHanlders(dealDeck);
@@ -334,13 +350,43 @@ const updateDragState = () => {
 };
 
 const updateWinState = () => {
-  const foundationCards = _state.board.foundations.reduce((sum, deck) => (sum + deck.cards.length), 0);
+  // All cards are in foundations
+  const foundationCards = Deck.decksCardCount(_state.board.foundations);
   if (foundationCards >= 52) {
     _state.ui.winMessage.style.width = '';
-  } else {
-    _state.ui.winMessage.style.width = '0';
+    return;
   }
-}
+
+  // All cards could be in foundations
+  const cascadeCards = Deck.decksCardCount(_state.board.cascades);
+  const finishedCascadeCards = _state.board.cascades.reduce((sum, deck) =>
+    (sum + deck.cards.reduce((deckSum, card, idx) => {
+      if (idx === 0) return (deckSum + 1);
+      const prevCard = deck.cards[idx - 1];
+      return deckSum + (Card.isValidStack(prevCard, card) ? 1 : 0);
+    }, 0)),
+  0);
+  if (finishedCascadeCards === cascadeCards) {
+    for (let i = 0; i < _state.board.allDecks.length; i++) {
+      const deck = _state.board.allDecks[i];
+      const card = Deck.lastCard(deck);
+      if (!card || _state.board.foundations.includes(deck)) {  // TODO: Better
+        continue;
+      }
+      for (let j = 0; j < _state.board.foundations.length; j++) {
+        const foundation = _state.board.foundations[j];
+        const prevCard = Deck.lastCard(foundation);
+        if ((!prevCard && card.rank === 1) || Card.isNextInSuit(prevCard, card)) {
+          Deck.dealCard(deck, foundation, card, true);
+          return setTimeout(updateState, 60);
+        }
+      }
+    }
+  }
+
+  // Not won
+  _state.ui.winMessage.style.width = '0';
+};
 
 const canDeckReceiveCards = (deck, cards) => {
   const botCard = cards[0];
@@ -354,16 +400,13 @@ const canDeckReceiveCards = (deck, cards) => {
     if (cards.length > 1) return false;
     const prevCard = Deck.lastCard(deck);
     if (!prevCard) return botCard.rank === 1;
-    return (prevCard.suit === botCard.suit &&
-            prevCard.rank === botCard.rank - 1);
-
+    return Card.isNextInSuit(prevCard, botCard);
   }
 
   if (_state.board.cascades.includes(deck)) {
     const prevCard = Deck.lastCard(deck);
     if (!prevCard) return true;
-    return (((prevCard.suit + botCard.suit) % 2) === 1 &&
-            prevCard.rank === botCard.rank + 1);
+    return Card.isValidStack(prevCard, botCard);
   }
 };
 
@@ -379,8 +422,11 @@ initGlobalHandlers();
 newGame();
 
 // TODO:
+//  [ ] stats (local storage)
+//  [ ] improve card follow when zoomed in
+//  [ ] prevent copy/paste cards?
+//  [ ] undo button
 //  [ ] clean up lol
-//  [ ] make mobile more reliable
 
 
 
