@@ -233,7 +233,7 @@ const initCardHanlders = (() => {
       }
     });
 
-    if ((toDeck !== originDeck) && canDeckReceiveCards(toDeck, dragDeck.cards)) {
+    if (canDeckReceiveCards(toDeck, dragDeck.cards)) {
       // Update tableau state
       if (_state.board.cascades.includes(toDeck)) {
         dragDeck.cards.forEach((card) => { card.tableau = true; });
