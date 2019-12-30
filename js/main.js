@@ -211,7 +211,12 @@ const initCardHanlders = (() => {
 
   const releaseCards = (evt) => {
     const dragDeck = _state.drag.deck;
-    if (dragDeck.cards.length < 1) return;
+    if (dragDeck.cards.length < 1) {
+      // Update state just in case
+      // Sometimes we disabled dragging to override underlying Card behavior
+      updateState();
+      return;
+    }
 
     let originDeck = _state.drag.originDeck;
     _state.drag.originDeck = null;
@@ -228,7 +233,7 @@ const initCardHanlders = (() => {
       }
     });
 
-    if (canDeckReceiveCards(toDeck, dragDeck.cards)) {
+    if ((toDeck !== originDeck) && canDeckReceiveCards(toDeck, dragDeck.cards)) {
       // Update tableau state
       if (_state.board.cascades.includes(toDeck)) {
         dragDeck.cards.forEach((card) => { card.tableau = true; });
@@ -241,9 +246,9 @@ const initCardHanlders = (() => {
     updateState();
   };
 
-  const grabCardsFn = (card) => (evt) => {
+  const grabCards = (card, evt) => {
     // TODO: jesus
-    if (!card.isDraggable) return;
+    if (!card.isDraggable) return false;
     _state.drag.originDeck = card.deck;
     const pos = card.$el.getBoundingClientRect();
     Deck.move(_state.drag.deck, pos);
@@ -252,35 +257,58 @@ const initCardHanlders = (() => {
     return true;
   };
 
-  const moveToFreeCellFn = (card) => {
+  const moveToFreeCell = (card, evt) => {
+    if (card !== Deck.lastCard(card.deck)) return false;
+
+    let freeCell;
+    for (let i = 0; i < _state.board.cells.length; i++) {
+      const cell = _state.board.cells[i];
+      if (cell.cards.length < 1) {
+        freeCell = cell;
+        break;
+      }
+    }
+    if (!freeCell) return false;
+
+    Deck.deal(card.deck, freeCell);
+    updateState();
+    return true;
+  };
+
+  const reconcileClickEventFn = (card) => {
     // Manual double click logic..... :\
+    // TODO: pull this out into helper fn?
     let clicks = 0;
     let lastClick = Date.now();
     return (evt) => {
+      let isDoubleClick = true;
+
       const dt = Date.now() - lastClick;
       lastClick = Date.now();
-      if (++clicks < 2) return true;
-      if (dt > 500) {
+      if (++clicks < 2) {
+        isDoubleClick = false;
+      } else if (dt > 500) {
         clicks = 1;
-        return true;
+        isDoubleClick = false;
+      } else {
+        clicks = 0;
+        // isDoubleClick = true;
       }
-      clicks = 0;
 
-      if (card !== Deck.lastCard(card.deck)) return true;
-
-      let freeCell;
-      for (let i = 0; i < _state.board.cells.length; i++) {
-        const cell = _state.board.cells[i];
-        if (cell.cards.length < 1) {
-          freeCell = cell;
-          break;
-        }
+      // Sometimes disable click and drag on the underlying card structure
+      // else you can drag even after weve "released" the card into a new deck.
+      // This overrides the update state in moveToFreeCell
+      // and relies on updating state on mouse up
+      if (evt.touches && evt.touches.length > 1) {
+        releaseCards(evt);
+        Card.disableDragging(card);
+      } else if (isDoubleClick) {
+        // TODO: worth grabbing cards if move to free cell fails?
+        moveToFreeCell(card, evt);
+        Card.disableDragging(card);
+      } else {
+        grabCards(card, evt);
       }
-      if (!freeCell) return true;
-
-      Deck.deal(card.deck, freeCell);
-      updateState();
-      return true;
     };
   };
 
@@ -289,12 +317,9 @@ const initCardHanlders = (() => {
   document.addEventListener('mouseup', releaseCards);
   document.addEventListener('touchend', releaseCards);
   return (deck) => {
-    // GRAB
     deck.cards.forEach((card) => {
-      card.$el.addEventListener('mousedown', grabCardsFn(card));
-      card.$el.addEventListener('touchstart', grabCardsFn(card));
-      card.$el.addEventListener('mousedown', moveToFreeCellFn(card));
-      card.$el.addEventListener('touchstart', moveToFreeCellFn(card));
+      card.$el.addEventListener('mousedown', reconcileClickEventFn(card));
+      card.$el.addEventListener('touchstart', reconcileClickEventFn(card));
     });
   }
 })();
