@@ -1,0 +1,22 @@
+{
+  "short_name": "Freecell",
+  "name": "Freecell",
+  "description": "Mom's Freecell!",
+  "id": "./",
+  "start_url": "./",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "./img/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "./img/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "background_color": "#0e7c11",
+  "theme_color": "#0e7c11"
+}

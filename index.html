@@ -1,17 +1,44 @@
 <html>
 <head>
   <title>Mom's Freecell!</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="shortcut icon" type="image/png" href="./img/freecellking.png"/>
+  <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./css/lib/deck.css"/>
+  <script async src="./js/service-worker-loader.js"></script>
+  <script defer src="./js/lib/deck.min.js"></script>
+  <script defer src="./js/main.js"></script>
+
+  <link rel="preload" href="./img/freecellking.png" as="image" />
+  <link rel="preload" href="./css/lib/faces/back.png" as="image" />
+
   <style>
     :root {
-      --card-width: 5rem;
+      --card-width: 8vw;
       --card-height: calc(var(--card-width) * 1.42);
       --font-size: calc(var(--card-height) * 0.12);
+      --card-border-width: 1px;
+      --card-border-radius: 4px;
+      --ui-shadow-color: rgb(6, 47, 8);
+      --ui-light-color: rgb(34, 221, 39);
+      --ui-border-out: var(--ui-light-color) var(--ui-shadow-color) var(--ui-shadow-color) var(--ui-light-color);
+      --ui-border-in: var(--ui-shadow-color) var(--ui-light-color) var(--ui-light-color) var(--ui-shadow-color);
+      --ui-border-width: calc(var(--card-width) / 40);
+    }
+
+    @media (max-width: 720px) {
+      :root {
+        --card-border-width: 0.1px;
+        --card-border-radius: 2px;
+      }
     }
 
     html, body {
-      overflow-x: hidden;
+      overflow: hidden;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
 
     body {
@@ -23,6 +50,8 @@
     #board {
       width: 100%;
       height: 100%;
+      overflow-y: scroll;
+      overflow-x: hidden;
     }
 
     .top {
@@ -39,39 +68,58 @@
       width: var(--card-width);
       height: var(--card-height);
       border-style: solid;
-      border-width: 2px;
-      border-radius: 2px;
-      border-color: rgb(6, 47, 8) rgb(34, 221, 39) rgb(34, 221, 39) rgb(6, 47, 8);
+      border-width: var(--ui-border-width);
+      border-radius: var(--ui-border-width);
+      border-color: var(--ui-border-in);
     }
 
-    .reset-button {
+    .button {
       position: relative;
-      width: 40px;
-      height: 40px;
+      width: calc(var(--card-width) / 2);
+      height: calc(var(--card-width) / 2);
+      padding: 0;
       background-color: transparent;
       border-style: solid;
-      border-width: 2px;
-      border-radius: 2px;
-      border-color: rgb(34, 221, 39) rgb(6, 47, 8) rgb(6, 47, 8) rgb(34, 221, 39);
+      border-width: var(--ui-border-width);
+      border-radius: var(--ui-border-width);
+      border-color: var(--ui-border-out);
+      cursor: pointer;
     }
 
-    .reset-button::after {
+    .button:active:not([disabled]) {
+      border-color: var(--ui-border-in);
+    }
+
+    .button:disabled {
+      cursor: auto;
+      filter: grayscale(1)
+    }
+
+    .button::after {
       /* NOTE: had to do this to avoid flipping button border */
-      /* TODO:: this is hacky as heck, improve */
       content: '';
       position: absolute;
       display: block;
-      left: -2px;
-      top: -2px;
+      left: calc(-1 * var(--ui-border-width));
+      top: calc(-1 * var(--ui-border-width));
       width: inherit;
       height: inherit;
-      background-image: url("./img/freecellking.png");
+      background-size: 80%;
       background-repeat: no-repeat;
       background-position: center;
     }
 
-    .reset-button.reflected::after {
+    #resetButton::after {
+      background-image: url("./img/freecellking.png");
+    }
+
+    #resetButton.reflected::after {
       transform: scaleX(-1);
+    }
+
+    #undoButton::after {
+      background-image: url("./img/freecellking.png");
+      transform: scaleY(-1);
     }
 
     .cascades {
@@ -117,7 +165,6 @@
   </style>
 </head>
 <body>
-  <!-- TODO: wrap this all in a fake windows window??? -->
   <div id="board">
     <div class="top">
       <span class="card-placeholder-quartet">
@@ -126,7 +173,8 @@
         <span class="card-placeholder deck-container"><span class="cell deck-positioner"></span></span>
         <span class="card-placeholder deck-container"><span class="cell deck-positioner"></span></span>
       </span>
-      <button class="reset-button" id="resetButton"></button>
+      <button class="button" id="resetButton"></button>
+      <button class="button" id="undoButton" disabled></button>
       <span class="card-placeholder-quartet">
         <span class="card-placeholder deck-container"><span class="foundation deck-positioner"></span></span>
         <span class="card-placeholder deck-container"><span class="foundation deck-positioner"></span></span>
@@ -146,8 +194,6 @@
     </div>
   </div>
   <div id="dragDeck" class="deck-positioner"></div>
-  <div id="winMessage"></div>
-  <script src="./js/lib/deck.min.js"></script>
-  <script src="./js/main.js"></script>
+  <div id="winMessage" style="width: 0"></div>
 </body>
 </html>

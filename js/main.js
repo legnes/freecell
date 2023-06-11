@@ -81,7 +81,6 @@ Deck.move = (deck, pos) => {
 
 Deck.moveCards = (deck, dPos, idx) => {
   idx = idx || 0;
-  const deckPos = deck.$el.getBoundingClientRect();
   for (let i = idx; i < deck.cards.length; i++) {
     const card = deck.cards[i];
     card.$el.style.transform = `translate(${Math.round(card.x + dPos.x)}px, ${Math.round(card.y + dPos.y)}px)`;
@@ -92,14 +91,17 @@ Deck.makeSpreadable = (deck) => {
   deck.isSpreadable = true;
   deck.spread = deck.queued(spread)
 
-  function spread (next) {
+  function spread(next) {
     const len = deck.cards.length;
     deck.cards.forEach(function (card, i) {
-      const z = i / 4
       const delay = i * 10
 
       card.animateTo({
-        delay: 300 + delay,
+        // The base delay used to be set to 300, but it seemed like there was a race
+        // where it may have been finishing before shuffle (~504ms), which then set the wrong zindex.
+        // There's some extra complication because we are dealing while shuffling is onging...
+        // Real solution here is probably to write our own shuffle logic with promises or cbs
+        delay: 600 + delay,
         duration: 300,
         x: 0,
         y: i * Card.fontSize(),
@@ -114,12 +116,30 @@ Deck.makeSpreadable = (deck) => {
     });
   }
 
+  deck.respread = () => {
+    deck.cards.forEach(function (card, i) {
+      card.animateTo({
+        delay: 0,
+        duration: 0,
+        x: 0,
+        y: i * Card.fontSize(),
+      });
+    });
+  }
+
   return deck;
 };
 
 Deck.forEachDeckXCard = (decks, fn) => decks.forEach((d) => d.cards.forEach((c, i) => fn(d, c, i)));
 
-Deck.decksCardCount = (decks, fn) => decks.reduce((sum, d) => (d.cards.length + sum), 0);
+Deck.forEachDeckXCardReversed = (decks, fn) => decks.forEach((d) => {
+  const cards = d.cards;
+  for (let i = cards.length - 1; i >= 0; i--) {
+    fn(d, cards[i], i);
+  }
+});
+
+Deck.decksCardCount = (decks) => decks.reduce((sum, d) => (d.cards.length + sum), 0);
 
 const Card = {};
 
@@ -159,19 +179,27 @@ const subtractPositions = (a, b) => {
 const initGlobalHandlers = () => {
   const resetElt = document.getElementById('resetButton');
   document.addEventListener('mousemove', (evt) => {
-    const fn = evt.clientX > (0.5 * window.innerWidth) ? 'add' : 'remove';
+    const { left, right } = resetElt.getBoundingClientRect();
+    const fn = evt.clientX > (left + right) / 2 ? 'add' : 'remove';
     resetElt.classList[fn]("reflected");
   });
   resetElt.addEventListener('click', newGame);
+
+  const undoElt = document.getElementById('undoButton');
+  undoElt.addEventListener('click', undo);
+
+  window.addEventListener('resize', () => {
+    _state.board.cascades.forEach(deck => deck.respread());
+  });
 };
 
 const initGlobalState = () => {
-  const boardElt = document.getElementById('board');
   const cellElts = document.getElementsByClassName('cell');
   const foundationElts = document.getElementsByClassName('foundation');
   const cascadeElts = document.getElementsByClassName('cascade');
   const dragDeck = document.getElementById('dragDeck');
   const winMessage = document.getElementById('winMessage');
+  const undoButton = document.getElementById('undoButton');
 
   _state = {
     board: {
@@ -185,7 +213,12 @@ const initGlobalState = () => {
       startPos: null
     },
     ui: {
-      winMessage
+      winMessage,
+      undoButton
+    },
+    undo: {
+      originDeck: null,
+      startCard: null
     }
   };
   _state.board.cascades.forEach(Deck.makeSpreadable);
@@ -199,7 +232,6 @@ const initGlobalState = () => {
 
 // Game creation stuff ////////////////////////////////////////////////
 
-// TODO: BLEEEEEEEECcccH
 const initCardHanlders = (() => {
   const dragCards = (evt) => {
     const dragDeck = _state.drag.deck;
@@ -218,7 +250,7 @@ const initCardHanlders = (() => {
       return;
     }
 
-    let originDeck = _state.drag.originDeck;
+    const originDeck = _state.drag.originDeck;
     _state.drag.originDeck = null;
 
     const evtPos = getEvtPosition(evt);
@@ -239,15 +271,16 @@ const initCardHanlders = (() => {
         dragDeck.cards.forEach((card) => { card.tableau = true; });
         if (toDeck.cards.length > 0) Deck.lastCard(toDeck).tableau = true;
       }
-      Deck.dealCards(_state.drag.deck, toDeck);
+      const startCard = dragDeck.cards[0];
+      Deck.dealCards(dragDeck, toDeck);
+      updateUndoState(originDeck, startCard);
     } else {
-      Deck.dealCards(_state.drag.deck, originDeck);
+      Deck.dealCards(dragDeck, originDeck);
     }
     updateState();
   };
 
   const grabCards = (card, evt) => {
-    // TODO: jesus
     if (!card.isDraggable) return false;
     _state.drag.originDeck = card.deck;
     const pos = card.$el.getBoundingClientRect();
@@ -257,8 +290,14 @@ const initCardHanlders = (() => {
     return true;
   };
 
-  const moveToFreeCell = (card, evt) => {
-    if (card !== Deck.lastCard(card.deck)) return false;
+  const moveToFreeCell = (card) => {
+    if (
+      card !== Deck.lastCard(card.deck) ||
+      _state.board.foundations.some(d => d.cards.includes(card)) ||
+      _state.board.cells.some(d => d.cards.includes(card))
+    ) {
+      return false;
+    }
 
     let freeCell;
     for (let i = 0; i < _state.board.cells.length; i++) {
@@ -270,14 +309,15 @@ const initCardHanlders = (() => {
     }
     if (!freeCell) return false;
 
-    Deck.deal(card.deck, freeCell);
+    const fromDeck = card.deck;
+    Deck.deal(fromDeck, freeCell);
+    updateUndoState(fromDeck, card);
     updateState();
     return true;
   };
 
   const reconcileClickEventFn = (card) => {
     // Manual double click logic..... :\
-    // TODO: pull this out into helper fn?
     let clicks = 0;
     let lastClick = Date.now();
     return (evt) => {
@@ -303,9 +343,11 @@ const initCardHanlders = (() => {
         releaseCards(evt);
         Card.disableDragging(card);
       } else if (isDoubleClick) {
-        // TODO: worth grabbing cards if move to free cell fails?
-        moveToFreeCell(card, evt);
-        Card.disableDragging(card);
+        if (moveToFreeCell(card)) {
+          Card.disableDragging(card);
+        } else {
+          grabCards(card, evt);
+        }
       } else {
         grabCards(card, evt);
       }
@@ -335,6 +377,8 @@ const newGame = () => {
   // Then empty all the decks
   _state.board.allDecks.forEach(Deck.empty);
 
+  updateUndoState(null, null);
+
   const dealDeck = Deck();
   initCardHanlders(dealDeck);
   dealDeck.shuffle();
@@ -351,22 +395,23 @@ const newGame = () => {
 
 // Game logic stuff ////////////////////////////////////////////////
 const updateDragState = () => {
-  Deck.forEachDeckXCard(_state.board.foundations, (deck, card) => Card.disableDragging(card));
-  Deck.forEachDeckXCard(_state.board.cells, (deck, card) => {
+  Deck.forEachDeckXCard(_state.board.foundations, (_deck, card) => Card.disableDragging(card));
+  Deck.forEachDeckXCard(_state.board.cells, (_deck, card) => {
     card.tableau = false;
     Card.enableDragging(card);
   });
-  Deck.forEachDeckXCard(_state.board.cascades, (deck, card, idx) => {
-    if (idx === 0) {
-      card.tableau = !!card.tableau;
+  Deck.forEachDeckXCardReversed(_state.board.cascades, (deck, card, idx) => {
+    if (idx === Deck.lastIdx(deck)) {
+      card.tableau = true;
     } else {
-      card.tableau = (card.tableau || deck.cards[idx - 1].tableau);
+      const nextCard = deck.cards[idx + 1];
+      card.tableau = (card.tableau || (nextCard.tableau && Card.isValidStack(card, nextCard)));
     }
 
     const availableCellCount = _state.board.cells.reduce((num, cell) => (num - cell.cards.length), 4)
     const deckOffset = Deck.lastIdx(deck) - deck.cards.indexOf(card);
 
-    if ((card.tableau && deckOffset <= availableCellCount) || idx === Deck.lastIdx(deck)) {
+    if ((card.tableau && deckOffset <= availableCellCount)) {
       Card.enableDragging(card);
     } else {
       Card.disableDragging(card);
@@ -392,10 +437,11 @@ const updateWinState = () => {
     }, 0)),
   0);
   if (finishedCascadeCards === cascadeCards) {
+    updateUndoState(null, null);
     for (let i = 0; i < _state.board.allDecks.length; i++) {
       const deck = _state.board.allDecks[i];
       const card = Deck.lastCard(deck);
-      if (!card || _state.board.foundations.includes(deck)) {  // TODO: Better
+      if (!card || _state.board.foundations.includes(deck)) {
         continue;
       }
       for (let j = 0; j < _state.board.foundations.length; j++) {
@@ -413,9 +459,23 @@ const updateWinState = () => {
   _state.ui.winMessage.style.width = '0';
 };
 
+const updateUndoState = (originDeck, startCard) => {
+  _state.undo.originDeck = originDeck;
+  _state.undo.startCard = startCard;
+  _state.ui.undoButton.disabled = !(originDeck && startCard);
+}
+
+const undo = () => {
+  const { originDeck, startCard } = _state.undo;
+  updateUndoState(null, null);
+  if (originDeck && startCard) {
+    Deck.dealCards(startCard.deck, originDeck, startCard);
+    updateState();
+  }
+}
+
 const canDeckReceiveCards = (deck, cards) => {
   const botCard = cards[0];
-  // TODO: some marking?
   if (_state.board.cells.includes(deck)) {
     if (cards.length > 1) return false;
     return deck.cards.length < 1;
@@ -447,19 +507,6 @@ initGlobalHandlers();
 newGame();
 
 // TODO:
-//  [ ] stats (local storage)
 //  [ ] improve card follow when zoomed in
 //  [ ] prevent copy/paste cards?
-//  [ ] undo button
 //  [ ] clean up lol
-
-
-
-
-
-
-
-
-
-
-
