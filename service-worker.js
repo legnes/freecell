@@ -1,7 +1,7 @@
 // Freecell service worker
 
 // Manage cache versioning
-const VERSION = 1.4;
+const VERSION = 1.5;
 const CACHE_NAME = `freecellPWA-v${VERSION}`;
 
 // Collect resources to cache

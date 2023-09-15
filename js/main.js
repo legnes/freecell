@@ -188,9 +188,7 @@ const initGlobalHandlers = () => {
   const undoElt = document.getElementById('undoButton');
   undoElt.addEventListener('click', undo);
 
-  window.addEventListener('resize', () => {
-    _state.board.cascades.forEach(deck => deck.respread());
-  });
+  window.addEventListener('resize', resizeCascades);
 };
 
 const initGlobalState = () => {
@@ -219,6 +217,9 @@ const initGlobalState = () => {
     undo: {
       originDeck: null,
       startCard: null
+    },
+    interaction: {
+      enabled: false
     }
   };
   _state.board.cascades.forEach(Deck.makeSpreadable);
@@ -231,9 +232,13 @@ const initGlobalState = () => {
 };
 
 // Game creation stuff ////////////////////////////////////////////////
+const resizeCascades = () => {
+  _state.board.cascades.forEach(deck => deck.respread());
+}
 
 const initCardHanlders = (() => {
   const dragCards = (evt) => {
+    if (!_state.interaction.enabled) return;
     const dragDeck = _state.drag.deck;
     const botCard = dragDeck.cards[0];
     if (!botCard) return;
@@ -242,6 +247,7 @@ const initCardHanlders = (() => {
   };
 
   const releaseCards = (evt) => {
+    if (!_state.interaction.enabled) return;
     const dragDeck = _state.drag.deck;
     if (dragDeck.cards.length < 1) {
       // Update state just in case
@@ -281,6 +287,7 @@ const initCardHanlders = (() => {
   };
 
   const grabCards = (card, evt) => {
+    if (!_state.interaction.enabled) return;
     if (!card.isDraggable) return false;
     _state.drag.originDeck = card.deck;
     const pos = card.$el.getBoundingClientRect();
@@ -291,6 +298,7 @@ const initCardHanlders = (() => {
   };
 
   const moveToFreeCell = (card) => {
+    if (!_state.interaction.enabled) return;
     if (
       card !== Deck.lastCard(card.deck) ||
       _state.board.foundations.some(d => d.cards.includes(card)) ||
@@ -321,6 +329,7 @@ const initCardHanlders = (() => {
     let clicks = 0;
     let lastClick = Date.now();
     return (evt) => {
+      if (!_state.interaction.enabled) return;
       let isDoubleClick = true;
 
       const dt = Date.now() - lastClick;
@@ -366,14 +375,24 @@ const initCardHanlders = (() => {
   }
 })();
 
-const newGame = () => {
-  // First queue a test fn to make sure no decks are still animating
-  for (let i = 0; i < _state.board.allDecks.length; i++) {
-    const deck = _state.board.allDecks[i];
-    let idle = true;
-    deck.queue((cb) => { idle = false; cb(); });
-    if (idle) return false;
+const isAnyDeckAnimating = () => {
+  // Queue a test fn and see if it gets called immediately
+  for (const deck of _state.board.allDecks) {
+    let idle = false;
+    deck.queue((cb) => { idle = true; cb(); });
+    if (!idle) return true;
   }
+}
+
+const newGame = () => {
+  // First make sure no decks are still animating
+  if (isAnyDeckAnimating()) {
+    return false;
+  }
+
+  // Disable interactiong during reset
+  _state.interaction.enabled = false;
+
   // Then empty all the decks
   _state.board.allDecks.forEach(Deck.empty);
 
@@ -391,6 +410,16 @@ const newGame = () => {
   _state.board.cascades.forEach(d => d.spread());
   _state.board.cascades.forEach(d => d.flip());
   updateState();
+
+  // Handle interaction during shuffle/deal animation
+  const handle = setInterval(() => {
+    if (!isAnyDeckAnimating()) {
+      clearInterval(handle);
+      // In case resize (e.g. rotate) has happened during deal
+      resizeCascades();
+      _state.interaction.enabled = true;
+    }
+  }, 100);
 };
 
 // Game logic stuff ////////////////////////////////////////////////
