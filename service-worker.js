@@ -1,7 +1,7 @@
 // Freecell service worker
 
 // Manage cache versioning
-const VERSION = 1.5;
+const VERSION = 1.6;
 const CACHE_NAME = `freecellPWA-v${VERSION}`;
 
 // Collect resources to cache
@@ -23,12 +23,14 @@ for (let i = 0; i < 4; i++) {
   }
 }
 
+const ALL_ASSET_URLS = [ OFFLINE_URL, ...PAGE_ASSETS, ...CARD_FACE_ASSETS ];
+
 // Install: cache assets
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      await cache.addAll([ OFFLINE_URL, ...PAGE_ASSETS, ...CARD_FACE_ASSETS ]);
+      await cache.addAll(ALL_ASSET_URLS.map((url) => new Request(url, { cache: "reload" })));
     })()
   );
 });
