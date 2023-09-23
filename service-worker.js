@@ -1,7 +1,7 @@
 // Freecell service worker
 
 // Manage cache versioning
-const VERSION = 1.6;
+const VERSION = "1.7";
 const CACHE_NAME = `freecellPWA-v${VERSION}`;
 
 // Collect resources to cache
@@ -27,6 +27,7 @@ const ALL_ASSET_URLS = [ OFFLINE_URL, ...PAGE_ASSETS, ...CARD_FACE_ASSETS ];
 
 // Install: cache assets
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -66,7 +67,8 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// Interceptor1: Assets (cache first)
+// Interceptor 2: Assets (cache first)
+// GH Pages cache max-age is only 600 seconds
 self.addEventListener("fetch", (event) => {
   event.respondWith(
     (async () => {
